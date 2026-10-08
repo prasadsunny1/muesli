@@ -1,4 +1,5 @@
 import FluidAudio
+import CoreML
 import Foundation
 import MuesliCore
 
@@ -6,7 +7,8 @@ import MuesliCore
 /// running on Apple's Neural Engine (ANE) via CoreML.
 actor FluidAudioTranscriber {
     private var asrManager: AsrManager?
-    private var loadedVersion: AsrModelVersion?
+    private var loadedModel: ParakeetTDTModel?
+    private var loadGeneration: UInt64 = 0
 
     enum TranscriberError: Error, LocalizedError {
         case notLoaded
@@ -20,16 +22,25 @@ actor FluidAudioTranscriber {
     }
 
     /// Downloads models (if needed) and initializes the ASR manager.
-    /// - Parameter version: .v3 for multilingual (25 langs), .v2 for English-only
+    /// Keep the weight identity separate from the shared v3 decoder contract.
     func loadModels(
-        version: AsrModelVersion = .v3,
+        model: ParakeetTDTModel = .v3,
         progress: ((Double, String?) -> Void)? = nil,
         progressSnapshot: ModelDownloadProgressHandler? = nil
     ) async throws {
-        if loadedVersion == version, asrManager != nil { return }
+        if model == .redux {
+            guard #available(macOS 15, *) else {
+                throw AsrModelsError.loadingFailed("Parakeet Redux requires macOS 15 or later.")
+            }
+        }
+        if loadedModel == model, asrManager != nil { return }
+        loadGeneration &+= 1
+        let generation = loadGeneration
+        asrManager = nil
+        loadedModel = model // Also invalidate an in-flight load if this model is deleted.
 
-        fputs("[fluidaudio] downloading/loading models (version: \(version))...\n", stderr)
-        let plan = version == .v2 ? ManagedASRModelPlans.parakeetV2() : ManagedASRModelPlans.parakeetV3()
+        fputs("[fluidaudio] downloading/loading models: \(model.rawValue)...\n", stderr)
+        let plan = model.plan()
         let manager = try await ManagedASRModelDownloader.loadValidated(
             plan,
             progress: progress,
@@ -41,13 +52,24 @@ actor FluidAudioTranscriber {
             )
             progress?(0.95, preparing.message)
             progressSnapshot?(preparing)
-            let models = try await AsrModels.load(from: modelDirectory, version: version)
+            let models: AsrModels
+            switch model {
+            case .v2, .v3:
+                models = try await AsrModels.load(from: modelDirectory, version: model == .v2 ? .v2 : .v3)
+            case .redux, .ultra:
+                // FluidAudio 0.15.5 predates these model enums. Its repository
+                // loader resolves v3's canonical cache, so loading with .v3
+                // there would silently use the original weights. Construct the
+                // public model bundle from this exact managed directory instead.
+                models = try ParakeetCommunityModelLoader.load(from: modelDirectory)
+            }
             let manager = AsrManager(config: .default)
             try await manager.loadModels(models)
             return manager
         }
+        guard generation == loadGeneration else { throw CancellationError() }
         self.asrManager = manager
-        self.loadedVersion = version
+        self.loadedModel = model
         let preparing = ModelDownloadProgress.preparing(
             modelID: plan.modelID,
             message: "Loading Parakeet into Core ML..."
@@ -69,13 +91,14 @@ actor FluidAudioTranscriber {
 
     func shutdown() {
         asrManager = nil
-        loadedVersion = nil
+        loadedModel = nil
+        loadGeneration &+= 1
     }
 
-    func shutdown(ifLoadedVersion version: AsrModelVersion) {
+    func shutdown(ifLoadedModel model: ParakeetTDTModel) {
         guard FluidAudioUnloadPolicy.shouldUnload(
-            loadedVersion: loadedVersion,
-            deletingVersion: version
+            loadedModel: loadedModel,
+            deletingModel: model
         ) else { return }
         shutdown()
     }
@@ -83,9 +106,58 @@ actor FluidAudioTranscriber {
 
 enum FluidAudioUnloadPolicy {
     static func shouldUnload(
-        loadedVersion: AsrModelVersion?,
-        deletingVersion: AsrModelVersion
+        loadedModel: ParakeetTDTModel?,
+        deletingModel: ParakeetTDTModel
     ) -> Bool {
-        loadedVersion == deletingVersion
+        loadedModel == deletingModel
+    }
+}
+
+/// Redux and Ultra use v3's 8192-token TDT contract, with independent weights.
+/// Load locally only: the managed downloader owns transport and completeness.
+enum ParakeetCommunityModelLoader {
+    static func load(from directory: URL) throws -> AsrModels {
+        let configuration = MLModelConfiguration()
+        configuration.computeUnits = .cpuAndNeuralEngine
+        func component(_ name: String, units: MLComputeUnits) throws -> MLModel {
+            let config = MLModelConfiguration()
+            config.computeUnits = units
+            return try MLModel(contentsOf: directory.appendingPathComponent(name), configuration: config)
+        }
+        let vocabulary = try parseVocabulary(
+            Data(contentsOf: directory.appendingPathComponent("parakeet_vocab.json"))
+        )
+        return try AsrModels(
+            encoder: component("Encoder.mlmodelc", units: .cpuAndNeuralEngine),
+            preprocessor: component("Preprocessor.mlmodelc", units: .cpuOnly),
+            decoder: component("Decoder.mlmodelc", units: .cpuAndNeuralEngine),
+            joint: component("JointDecisionv3.mlmodelc", units: .cpuAndNeuralEngine),
+            configuration: configuration,
+            vocabulary: vocabulary,
+            version: .v3
+        )
+    }
+
+    static func parseVocabulary(_ data: Data) throws -> [Int: String] {
+        let json = try JSONSerialization.jsonObject(with: data)
+        let vocabulary: [Int: String]
+        if let tokens = json as? [String] {
+            vocabulary = Dictionary(uniqueKeysWithValues: tokens.enumerated().map { ($0.offset, $0.element) })
+        } else if let tokens = json as? [String: String] {
+            var parsed: [Int: String] = [:]
+            for (key, token) in tokens {
+                guard let id = Int(key), id >= 0, parsed[id] == nil else {
+                    throw AsrModelsError.loadingFailed("Invalid Parakeet vocabulary token ID: \(key)")
+                }
+                parsed[id] = token
+            }
+            vocabulary = parsed
+        } else {
+            throw AsrModelsError.loadingFailed("Parakeet vocabulary must be an array or token-ID dictionary.")
+        }
+        guard (0..<8192).allSatisfy({ vocabulary[$0] != nil }) else {
+            throw AsrModelsError.loadingFailed("Parakeet v3-family vocabulary must contain all 8192 tokens.")
+        }
+        return vocabulary
     }
 }
