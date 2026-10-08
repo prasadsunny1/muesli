@@ -53,15 +53,6 @@ struct BackendOption: Equatable {
         recommended: false
     )
 
-    static let parakeetUltra = BackendOption(
-        backend: "fluidaudio",
-        model: ParakeetTDTModel.ultra.rawValue,
-        label: "Parakeet Ultra",
-        sizeLabel: "~630 MB",
-        description: "An improved Parakeet v3 model for dictation in 25 languages, with a larger download. Published benchmarks report better accuracy than v3 at similar speed; try it with your own voice.",
-        recommended: false
-    )
-
     var parakeetTDTModel: ParakeetTDTModel? {
         backend == "fluidaudio" ? ParakeetTDTModel(rawValue: model) : nil
     }
@@ -208,7 +199,7 @@ struct BackendOption: Equatable {
     static let whisper = parakeetMultilingual
 
     static let parakeetFamily: [BackendOption] = [
-        .parakeetUnified, .parakeetMultilingual, .parakeetEnglish, .parakeetRedux, .parakeetUltra,
+        .parakeetUnified, .parakeetMultilingual, .parakeetEnglish, .parakeetRedux,
     ]
 
     static let whisperFamily: [BackendOption] = [

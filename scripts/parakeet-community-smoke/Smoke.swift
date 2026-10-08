@@ -57,7 +57,7 @@ import MuesliCore
             try require(plan.isAvailableLocally(), "Complete fixture cache is unavailable")
         }
         try ParakeetTDTModel.redux.plan(modelsRoot: root).delete()
-        for model in [ParakeetTDTModel.ultra, .v3, .v2] {
+        for model in [ParakeetTDTModel.v3, .v2] {
             try require(model.plan(modelsRoot: root).isAvailableLocally(), "Deleting Redux removed \(model)")
         }
         print("PASS: vocabulary completeness, independent caches, deletion and unload isolation")
@@ -74,12 +74,12 @@ import MuesliCore
             let wav = URL(fileURLWithPath: CommandLine.arguments[1])
             let transcriber = FluidAudioTranscriber()
             var failures = 0
-            for model in [ParakeetTDTModel.redux, .ultra, .v3] {
+            for model in [ParakeetTDTModel.redux, .v3] {
                 do {
                     print("Loading \(model.rawValue)")
                     try await transcriber.loadModels(model: model)
                     // Deleting a different variant must preserve this loaded runtime.
-                    await transcriber.shutdown(ifLoadedModel: model == .redux ? .ultra : .redux)
+                    await transcriber.shutdown(ifLoadedModel: model == .redux ? .v3 : .redux)
                     for attempt in 1...2 {
                         let result = try await transcriber.transcribe(wavURL: wav, language: "en")
                         try require(!result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,

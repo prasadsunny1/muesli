@@ -5,14 +5,12 @@ public enum ParakeetTDTModel: String, CaseIterable, Sendable {
     case v2 = "FluidInference/parakeet-tdt-0.6b-v2-coreml"
     case v3 = "FluidInference/parakeet-tdt-0.6b-v3-coreml"
     case redux = "FluidInference/parakeet-redux-coreml"
-    case ultra = "FluidInference/parakeet-ultra-coreml"
 
     public func plan(modelsRoot: URL? = nil) -> ManagedASRModelPlan {
         switch self {
         case .v2: return ManagedASRModelPlans.parakeetV2(modelsRoot: modelsRoot)
         case .v3: return ManagedASRModelPlans.parakeetV3(modelsRoot: modelsRoot)
         case .redux: return ManagedASRModelPlans.parakeetRedux(modelsRoot: modelsRoot)
-        case .ultra: return ManagedASRModelPlans.parakeetUltra(modelsRoot: modelsRoot)
         }
     }
 }
@@ -260,22 +258,10 @@ public enum ManagedASRModelPlans {
     }
 
     public static func parakeetRedux(modelsRoot: URL? = nil) -> ManagedASRModelPlan {
-        parakeetCommunityPlan(model: .redux, directoryName: "parakeet-redux", modelsRoot: modelsRoot)
-    }
-
-    public static func parakeetUltra(modelsRoot: URL? = nil) -> ManagedASRModelPlan {
-        parakeetCommunityPlan(model: .ultra, directoryName: "parakeet-ultra", modelsRoot: modelsRoot)
-    }
-
-    private static func parakeetCommunityPlan(
-        model: ParakeetTDTModel,
-        directoryName: String,
-        modelsRoot: URL?
-    ) -> ManagedASRModelPlan {
         fluidAudioPlan(
-            modelID: model.rawValue,
-            repository: model.rawValue,
-            directoryName: directoryName,
+            modelID: ParakeetTDTModel.redux.rawValue,
+            repository: ParakeetTDTModel.redux.rawValue,
+            directoryName: "parakeet-redux",
             required: [
                 "Preprocessor.mlmodelc", "Encoder.mlmodelc", "Decoder.mlmodelc",
                 "JointDecisionv3.mlmodelc", "parakeet_vocab.json",

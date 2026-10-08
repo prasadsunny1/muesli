@@ -56,7 +56,7 @@ actor FluidAudioTranscriber {
             switch model {
             case .v2, .v3:
                 models = try await AsrModels.load(from: modelDirectory, version: model == .v2 ? .v2 : .v3)
-            case .redux, .ultra:
+            case .redux:
                 // FluidAudio 0.15.5 predates these model enums. Its repository
                 // loader resolves v3's canonical cache, so loading with .v3
                 // there would silently use the original weights. Construct the
@@ -113,7 +113,7 @@ enum FluidAudioUnloadPolicy {
     }
 }
 
-/// Redux and Ultra use v3's 8192-token TDT contract, with independent weights.
+/// Redux uses v3's 8192-token TDT contract, with independent weights.
 /// Load locally only: the managed downloader owns transport and completeness.
 enum ParakeetCommunityModelLoader {
     static func load(from directory: URL) throws -> AsrModels {

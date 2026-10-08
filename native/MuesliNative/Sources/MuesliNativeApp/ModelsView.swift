@@ -951,7 +951,7 @@ struct ModelsView: View {
                     .disabled(incompatibilityReason != nil)
                 }
 
-                Text("Script filter: keeps the chosen language's writing script in the transcript. Available for Parakeet v3, Redux, and Ultra; v2 ignores this setting.")
+                Text("Script filter: keeps the chosen language's writing script in the transcript. Available for Parakeet v3 and Redux; v2 ignores this setting.")
                     .font(MuesliTheme.caption())
                     .foregroundStyle(MuesliTheme.textTertiary)
             }

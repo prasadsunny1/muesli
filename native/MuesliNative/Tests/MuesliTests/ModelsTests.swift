@@ -299,24 +299,22 @@ struct BackendOptionTests {
         }
     }
 
-    @Test("Redux and Ultra are selectable for dictation and meetings with independent caches")
+    @Test("Redux is selectable for dictation and meetings with an independent cache")
     func communityParakeetCatalog() {
         let root = URL(fileURLWithPath: "/tmp/parakeet-model-plans")
         let plans = ParakeetTDTModel.allCases.map { $0.plan(modelsRoot: root) }
         #expect(Set(plans.map(\.cacheDirectory)).count == plans.count)
-        for option in [BackendOption.parakeetRedux, .parakeetUltra] {
-            #expect(BackendOption.parakeetFamily.contains(option))
-            #expect(BackendOption.all.contains(option))
-            #expect(option.supportsMeetingTranscription)
-            #expect(!BackendOption.onboarding.contains(option))
-            #expect(BackendOption.resolve(backend: option.backend, model: option.model) == option)
-            let plan = option.parakeetTDTModel!.plan(modelsRoot: root)
-            #expect(plan.repository == option.model)
-            #expect(plan.requiredArtifactAlternatives.contains(["JointDecisionv3.mlmodelc/weights/weight.bin"]))
-        }
+        let option = BackendOption.parakeetRedux
+        #expect(BackendOption.parakeetFamily.contains(option))
+        #expect(BackendOption.all.contains(option))
+        #expect(option.supportsMeetingTranscription)
+        #expect(!BackendOption.onboarding.contains(option))
+        #expect(BackendOption.resolve(backend: option.backend, model: option.model) == option)
+        let plan = option.parakeetTDTModel!.plan(modelsRoot: root)
+        #expect(plan.repository == option.model)
+        #expect(plan.requiredArtifactAlternatives.contains(["JointDecisionv3.mlmodelc/weights/weight.bin"]))
         #expect(!BackendOption.parakeetRedux.isCompatible(currentOSVersion: Self.macOS14))
         #expect(BackendOption.parakeetRedux.isCompatible(currentOSVersion: Self.macOS15))
-        #expect(BackendOption.parakeetUltra.isCompatible(currentOSVersion: Self.macOS14))
     }
 
     @Test("Community Parakeet cache completeness and deletion preserve sibling variants")
@@ -325,8 +323,8 @@ struct BackendOptionTests {
         let root = fm.temporaryDirectory.appendingPathComponent("parakeet-\(UUID().uuidString)")
         defer { try? fm.removeItem(at: root) }
         let redux = ParakeetTDTModel.redux.plan(modelsRoot: root)
-        let ultra = ParakeetTDTModel.ultra.plan(modelsRoot: root)
-        for plan in [redux, ultra] {
+        let v3 = ParakeetTDTModel.v3.plan(modelsRoot: root)
+        for plan in [redux, v3] {
             #expect(!plan.isAvailableLocally())
             for group in plan.requiredArtifactAlternatives {
                 let path = plan.cacheDirectory.appendingPathComponent(group[0])
@@ -338,10 +336,10 @@ struct BackendOptionTests {
         let missingWeight = redux.cacheDirectory.appendingPathComponent("Encoder.mlmodelc/weights/weight.bin")
         try fm.removeItem(at: missingWeight)
         #expect(!redux.isAvailableLocally())
-        #expect(ultra.isAvailableLocally())
+        #expect(v3.isAvailableLocally())
         try redux.delete()
         #expect(!fm.fileExists(atPath: redux.cacheDirectory.path))
-        #expect(ultra.isAvailableLocally())
+        #expect(v3.isAvailableLocally())
     }
 
     @Test("Cohere uses cohere backend")

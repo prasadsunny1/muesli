@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ $# -ne 1 || "$1" == "--help" ]]; then
   echo "Usage: $0 <audio.wav | --test-only>"
-  echo "Downloads Redux and Ultra into the app's shared FluidAudio model cache."
+  echo "Downloads Redux and v3 into the app's shared FluidAudio model cache."
   echo "Requires macOS 14.2+ and Swift 6.0+ (Redux requires macOS 15+)."
   [[ $# -eq 1 && "$1" == "--help" ]] && exit 0
   exit 2
