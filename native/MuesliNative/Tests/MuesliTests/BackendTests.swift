@@ -34,6 +34,33 @@ struct FluidAudioTranscriberTests {
         #expect(BackendOption.parakeetEnglish.model.contains("FluidInference"))
     }
 
+    @Test("Community vocabulary accepts both formats and rejects incomplete token sets")
+    func communityVocabularyValidation() throws {
+        let tokens = (0..<8192).map { "token-\($0)" }
+        let array = try JSONSerialization.data(withJSONObject: tokens)
+        let dictionary = try JSONSerialization.data(withJSONObject:
+            Dictionary(uniqueKeysWithValues: tokens.enumerated().map { (String($0.offset), $0.element) })
+        )
+        let parsed = try ParakeetCommunityModelLoader.parseVocabulary(array)
+        #expect(parsed == (try ParakeetCommunityModelLoader.parseVocabulary(dictionary)))
+        #expect(parsed[8191] == "token-8191")
+        let incomplete = try JSONSerialization.data(withJSONObject: Array(tokens.dropLast()))
+        #expect(throws: (any Error).self) {
+            try ParakeetCommunityModelLoader.parseVocabulary(incomplete)
+        }
+        #expect(throws: (any Error).self) {
+            try ParakeetCommunityModelLoader.parseVocabulary(Data("{\"invalid\":\"token\"}".utf8))
+        }
+    }
+
+    @Test("Community loader fails locally when selected weights are missing")
+    func communityLoaderDoesNotFallbackToV3() {
+        let missing = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        #expect(throws: (any Error).self) {
+            try ParakeetCommunityModelLoader.load(from: missing)
+        }
+    }
+
     @Test("v2 model contains v2 in path")
     func v2Identification() {
         #expect(BackendOption.parakeetEnglish.model.contains("v2"))

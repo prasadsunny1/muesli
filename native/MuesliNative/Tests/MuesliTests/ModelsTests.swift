@@ -275,17 +275,71 @@ struct BackendOptionTests {
     @Test("Parakeet deletion unloads only the matching runtime variant")
     func parakeetDeletionUnloadPolicy() {
         #expect(FluidAudioUnloadPolicy.shouldUnload(
-            loadedVersion: .v2,
-            deletingVersion: .v2
+            loadedModel: .v2,
+            deletingModel: .v2
         ))
         #expect(!FluidAudioUnloadPolicy.shouldUnload(
-            loadedVersion: .v3,
-            deletingVersion: .v2
+            loadedModel: .v3,
+            deletingModel: .v2
         ))
         #expect(!FluidAudioUnloadPolicy.shouldUnload(
-            loadedVersion: nil,
-            deletingVersion: .v3
+            loadedModel: nil,
+            deletingModel: .v3
         ))
+    }
+
+    @Test("Parakeet variants unload independently even when sharing the v3 decoder")
+    func communityParakeetUnloadIsolation() {
+        for loaded in ParakeetTDTModel.allCases {
+            for deleting in ParakeetTDTModel.allCases {
+                #expect(FluidAudioUnloadPolicy.shouldUnload(
+                    loadedModel: loaded, deletingModel: deleting
+                ) == (loaded == deleting))
+            }
+        }
+    }
+
+    @Test("Redux is selectable for dictation and meetings with an independent cache")
+    func communityParakeetCatalog() {
+        let root = URL(fileURLWithPath: "/tmp/parakeet-model-plans")
+        let plans = ParakeetTDTModel.allCases.map { $0.plan(modelsRoot: root) }
+        #expect(Set(plans.map(\.cacheDirectory)).count == plans.count)
+        let option = BackendOption.parakeetRedux
+        #expect(BackendOption.parakeetFamily.contains(option))
+        #expect(BackendOption.all.contains(option))
+        #expect(option.supportsMeetingTranscription)
+        #expect(!BackendOption.onboarding.contains(option))
+        #expect(BackendOption.resolve(backend: option.backend, model: option.model) == option)
+        let plan = option.parakeetTDTModel!.plan(modelsRoot: root)
+        #expect(plan.repository == option.model)
+        #expect(plan.requiredArtifactAlternatives.contains(["JointDecisionv3.mlmodelc/weights/weight.bin"]))
+        #expect(!BackendOption.parakeetRedux.isCompatible(currentOSVersion: Self.macOS14))
+        #expect(BackendOption.parakeetRedux.isCompatible(currentOSVersion: Self.macOS15))
+    }
+
+    @Test("Community Parakeet cache completeness and deletion preserve sibling variants")
+    func communityParakeetCacheIsolation() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("parakeet-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: root) }
+        let redux = ParakeetTDTModel.redux.plan(modelsRoot: root)
+        let v3 = ParakeetTDTModel.v3.plan(modelsRoot: root)
+        for plan in [redux, v3] {
+            #expect(!plan.isAvailableLocally())
+            for group in plan.requiredArtifactAlternatives {
+                let path = plan.cacheDirectory.appendingPathComponent(group[0])
+                try fm.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try Data([1]).write(to: path)
+            }
+            #expect(plan.isAvailableLocally())
+        }
+        let missingWeight = redux.cacheDirectory.appendingPathComponent("Encoder.mlmodelc/weights/weight.bin")
+        try fm.removeItem(at: missingWeight)
+        #expect(!redux.isAvailableLocally())
+        #expect(v3.isAvailableLocally())
+        try redux.delete()
+        #expect(!fm.fileExists(atPath: redux.cacheDirectory.path))
+        #expect(v3.isAvailableLocally())
     }
 
     @Test("Cohere uses cohere backend")

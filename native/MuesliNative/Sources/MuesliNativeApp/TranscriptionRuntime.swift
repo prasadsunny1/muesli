@@ -218,8 +218,8 @@ actor TranscriptionCoordinator {
         }
     }
 
-    func unloadFluidAudioTranscriber(ifLoadedVersion version: AsrModelVersion) async {
-        await fluidTranscriber.shutdown(ifLoadedVersion: version)
+    func unloadFluidAudioTranscriber(ifLoadedModel model: ParakeetTDTModel) async {
+        await fluidTranscriber.shutdown(ifLoadedModel: model)
     }
 
     func unloadParakeetUnifiedTranscriber() async {
@@ -599,9 +599,11 @@ actor TranscriptionCoordinator {
 
         switch backend.backend {
         case "fluidaudio":
-            let version: AsrModelVersion = backend.model.contains("v2") ? .v2 : .v3
+            guard let model = backend.parakeetTDTModel else {
+                throw AsrModelsError.loadingFailed("Unknown Parakeet model: \(backend.model)")
+            }
             try await fluidTranscriber.loadModels(
-                version: version,
+                model: model,
                 progress: progress,
                 progressSnapshot: progressSnapshot
             )

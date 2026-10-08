@@ -44,6 +44,19 @@ struct BackendOption: Equatable {
         recommended: false
     )
 
+    static let parakeetRedux = BackendOption(
+        backend: "fluidaudio",
+        model: ParakeetTDTModel.redux.rawValue,
+        label: "Parakeet Redux",
+        sizeLabel: "~220 MB",
+        description: "A smaller download for dictation in 25 languages. Its compact weights trade some English accuracy and speed for size. Requires macOS 15; first-time Neural Engine preparation can take several minutes.",
+        recommended: false
+    )
+
+    var parakeetTDTModel: ParakeetTDTModel? {
+        backend == "fluidaudio" ? ParakeetTDTModel(rawValue: model) : nil
+    }
+
     static let whisperSmall = BackendOption(
         backend: "whisper",
         model: "small",
@@ -186,7 +199,7 @@ struct BackendOption: Equatable {
     static let whisper = parakeetMultilingual
 
     static let parakeetFamily: [BackendOption] = [
-        .parakeetUnified, .parakeetMultilingual, .parakeetEnglish,
+        .parakeetUnified, .parakeetMultilingual, .parakeetEnglish, .parakeetRedux,
     ]
 
     static let whisperFamily: [BackendOption] = [
@@ -320,6 +333,9 @@ struct BackendOption: Equatable {
     /// Shared OS requirements for model selection in onboarding and the library.
     /// Native `#available` checks still protect calls into newer system APIs.
     var minimumOSVersion: OperatingSystemVersion {
+        if parakeetTDTModel == .redux {
+            return OperatingSystemVersion(majorVersion: 15, minorVersion: 0, patchVersion: 0)
+        }
         switch backend {
         case "nemotron35", "qwen", "cohere", "bodhan", "gemma4-litert":
             return OperatingSystemVersion(majorVersion: 15, minorVersion: 0, patchVersion: 0)
@@ -398,10 +414,7 @@ struct BackendOption: Equatable {
         case "whisper":
             return WhisperKitTranscriber.isModelDownloaded(model)
         case "fluidaudio":
-            let plan = model.contains("v2")
-                ? ManagedASRModelPlans.parakeetV2()
-                : ManagedASRModelPlans.parakeetV3()
-            return plan.isAvailableLocally(fileManager: fm)
+            return parakeetTDTModel?.plan().isAvailableLocally(fileManager: fm) ?? false
         case "parakeet-unified":
             return ManagedASRModelPlans.parakeetUnified().isAvailableLocally(fileManager: fm)
         case "qwen":

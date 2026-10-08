@@ -1,5 +1,20 @@
 import Foundation
 
+/// Cache identity is separate from the shared v3 inference architecture.
+public enum ParakeetTDTModel: String, CaseIterable, Sendable {
+    case v2 = "FluidInference/parakeet-tdt-0.6b-v2-coreml"
+    case v3 = "FluidInference/parakeet-tdt-0.6b-v3-coreml"
+    case redux = "FluidInference/parakeet-redux-coreml"
+
+    public func plan(modelsRoot: URL? = nil) -> ManagedASRModelPlan {
+        switch self {
+        case .v2: return ManagedASRModelPlans.parakeetV2(modelsRoot: modelsRoot)
+        case .v3: return ManagedASRModelPlans.parakeetV3(modelsRoot: modelsRoot)
+        case .redux: return ManagedASRModelPlans.parakeetRedux(modelsRoot: modelsRoot)
+        }
+    }
+}
+
 /// A third-party ASR model whose transport is owned by Muesli.
 public struct ManagedASRModelPlan: Sendable {
     private struct CompletionMarker: Codable {
@@ -238,6 +253,19 @@ public enum ManagedASRModelPlans {
             mirror: muesliMirror(
                 "models/fluidaudio/parakeet-tdt-0.6b-v3/legacy-local-v1/manifest.json"
             ),
+            modelsRoot: modelsRoot
+        )
+    }
+
+    public static func parakeetRedux(modelsRoot: URL? = nil) -> ManagedASRModelPlan {
+        fluidAudioPlan(
+            modelID: ParakeetTDTModel.redux.rawValue,
+            repository: ParakeetTDTModel.redux.rawValue,
+            directoryName: "parakeet-redux",
+            required: [
+                "Preprocessor.mlmodelc", "Encoder.mlmodelc", "Decoder.mlmodelc",
+                "JointDecisionv3.mlmodelc", "parakeet_vocab.json",
+            ],
             modelsRoot: modelsRoot
         )
     }

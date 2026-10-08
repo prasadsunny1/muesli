@@ -951,7 +951,7 @@ struct ModelsView: View {
                     .disabled(incompatibilityReason != nil)
                 }
 
-                Text("Script filter: keeps the chosen language's writing script in the transcript. Parakeet v3 only — v2 ignores this setting.")
+                Text("Script filter: keeps the chosen language's writing script in the transcript. Available for Parakeet v3 and Redux; v2 ignores this setting.")
                     .font(MuesliTheme.caption())
                     .foregroundStyle(MuesliTheme.textTertiary)
             }
@@ -1986,14 +1986,11 @@ struct ModelsView: View {
                 fileManager: fm
             )
         case "fluidaudio":
-            let version: AsrModelVersion = option.model.contains("v2") ? .v2 : .v3
+            guard let model = option.parakeetTDTModel else { return }
             await controller.transcriptionCoordinator.unloadFluidAudioTranscriber(
-                ifLoadedVersion: version
+                ifLoadedModel: model
             )
-            let plan = version == .v2
-                ? ManagedASRModelPlans.parakeetV2()
-                : ManagedASRModelPlans.parakeetV3()
-            try plan.delete(fileManager: fm)
+            try model.plan().delete(fileManager: fm)
         case "parakeet-unified":
             await controller.transcriptionCoordinator.unloadParakeetUnifiedTranscriber()
             try ManagedASRModelPlans.parakeetUnified().delete(fileManager: fm)
@@ -2056,10 +2053,7 @@ struct ModelsView: View {
         case "nemotron35":
             return Nemotron35ModelStore.isModelDownloaded(fileManager: fm)
         case "fluidaudio":
-            let plan = option.model.contains("v2")
-                ? ManagedASRModelPlans.parakeetV2()
-                : ManagedASRModelPlans.parakeetV3()
-            return plan.isAvailableLocally(fileManager: fm)
+            return option.parakeetTDTModel?.plan().isAvailableLocally(fileManager: fm) ?? false
         case "parakeet-unified":
             return ManagedASRModelPlans.parakeetUnified().isAvailableLocally(fileManager: fm)
         case "qwen":
